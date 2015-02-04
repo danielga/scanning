@@ -1,4 +1,4 @@
-#include "SymbolFinder.hpp"
+#include "symbolfinder.hpp"
 #include <string>
 #include <map>
 
