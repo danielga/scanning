@@ -127,7 +127,7 @@ void *SymbolFinder::FindSymbol( const void *handle, const char *symbol )
 
 #if defined _WIN32
 
-	return GetProcAddress( reinterpret_cast<HMODULE>( handle ), symbol );
+	return GetProcAddress( reinterpret_cast<HMODULE>( const_cast<void *>( handle ) ), symbol );
 
 #elif defined __linux
 
