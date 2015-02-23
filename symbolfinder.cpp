@@ -1,6 +1,4 @@
 #include "symbolfinder.hpp"
-#include <string>
-#include <map>
 
 #if defined _WIN32
 
@@ -39,17 +37,6 @@ struct DynLibInfo
 	size_t memorySize;
 };
 
-#if defined __linux || defined __APPLE__
-
-struct LibSymbolTable
-{
-	std::map<std::string, void *> table;
-	uintptr_t lib_base;
-	uint32_t last_pos;
-};
-
-#endif
-
 SymbolFinder::SymbolFinder( )
 {
 
@@ -63,34 +50,22 @@ SymbolFinder::SymbolFinder( )
 		task_dyld_info_data_t dyld_info;
 		mach_msg_type_number_t count = TASK_DYLD_INFO_COUNT;
 		task_info( mach_task_self( ), TASK_DYLD_INFO, reinterpret_cast<task_info_t>( &dyld_info ), &count );
-		m_ImageList = reinterpret_cast<struct dyld_all_image_infos *>( dyld_info.all_image_info_addr );
+		m_ImageList = reinterpret_cast<dyld_all_image_infos *>( dyld_info.all_image_info_addr );
 	}
 	else
 	{
-		struct nlist list[2];
+		nlist list[2];
 		memset( list, 0, sizeof( list ) );
 		list[0].n_un.n_name = "_dyld_all_image_infos";
 		nlist( "/usr/lib/dyld", list );
-		m_ImageList = reinterpret_cast<struct dyld_all_image_infos *>( list[0].n_value );
+		m_ImageList = reinterpret_cast<dyld_all_image_infos *>( list[0].n_value );
 	}
 
 #endif
 
 }
 
-SymbolFinder::~SymbolFinder( )
-{
-
-#if defined __linux || defined __APPLE__
-
-	for( size_t i = 0; i < symbolTables.size( ); ++i )
-		delete symbolTables[i];
-
-#endif
-
-}
-
-void *SymbolFinder::FindPattern( void *handle, const uint8_t *pattern, size_t len )
+void *SymbolFinder::FindPattern( const void *handle, const uint8_t *pattern, size_t len )
 {
 	DynLibInfo lib;
 	memset( &lib, 0, sizeof( DynLibInfo ) );
@@ -119,7 +94,35 @@ void *SymbolFinder::FindPattern( void *handle, const uint8_t *pattern, size_t le
 	return NULL;
 }
 
-void *SymbolFinder::FindSymbol( void *handle, const char *symbol )
+void *SymbolFinder::FindPatternFromBinary( const char *name, const uint8_t *pattern, size_t len )
+{
+
+#if defined _WIN32
+
+	HMODULE binary = NULL;
+	if( GetModuleHandleEx( NULL, name, &binary ) == TRUE && binary != NULL )
+	{
+		void *symbol_pointer = FindPattern( binary, pattern, len );
+		FreeModule( binary );
+		return symbol_pointer;
+	}
+
+#elif defined __linux || defined __APPLE__
+
+	void *binary = dlopen( name, RTLD_LAZY | RTLD_NOLOAD );
+	if( binary != NULL )
+	{
+		void *symbol_pointer = FindPattern( binary, pattern, len );
+		dlclose( binary );
+		return symbol_pointer;
+	}
+
+#endif
+
+	return NULL;
+}
+
+void *SymbolFinder::FindSymbol( const void *handle, const char *symbol )
 {
 
 #if defined _WIN32
@@ -128,21 +131,19 @@ void *SymbolFinder::FindSymbol( void *handle, const char *symbol )
 
 #elif defined __linux
 
-	struct link_map *dlmap = reinterpret_cast<struct link_map *>( handle );
+	const link_map *dlmap = reinterpret_cast<const link_map *>( handle );
 	LibSymbolTable *libtable = NULL;
 	for( size_t i = 0; i < symbolTables.size( ); ++i )
-		if( symbolTables[i]->lib_base == dlmap->l_addr )
+		if( symbolTables[i].lib_base == dlmap->l_addr )
 		{
-			libtable = symbolTables[i];
+			libtable = &symbolTables[i];
 			break;
 		}
 
 	if( libtable == NULL )
 	{
-		libtable = new LibSymbolTable( );
-		libtable->lib_base = dlmap->l_addr;
-		libtable->last_pos = 0;
-		symbolTables.push_back( libtable );
+		symbolTables.push_back( LibSymbolTable( dlmap->l_addr ) );
+		libtable = &symbolTables.back( );
 	}
 
 	std::map<std::string, void *> &table = libtable->table;
@@ -219,41 +220,23 @@ void *SymbolFinder::FindSymbol( void *handle, const char *symbol )
 
 #elif defined __APPLE__
 
-	uintptr_t dlbase = 0;
-	uint32_t image_count = m_ImageList->infoArrayCount;
-	struct segment_command *linkedit_hdr = NULL;
-	struct symtab_command *symtab_hdr = NULL;
-	for( uint32_t i = 1; i < image_count; i++ )
-	{
-		const struct dyld_image_info &info = m_ImageList->infoArray[i];
-		void *h = dlopen( info.imageFilePath, RTLD_NOLOAD );
-		if( h == handle )
-		{
-			dlbase = reinterpret_cast<uintptr_t>( info.imageLoadAddress );
-			dlclose( h );
-			break;
-		}
-
-		dlclose( h );
-	}
-
-	if( dlbase == 0 )
+	DynLibInfo lib;
+	if( !GetLibraryInfo( handle, lib ) )
 		return NULL;
 
+	uintptr_t dlbase = lib.baseAddress;
 	LibSymbolTable *libtable = NULL;
 	for( size_t i = 0; i < symbolTables.size( ); ++i )
-		if( symbolTables[i]->lib_base == dlbase )
+		if( symbolTables[i].lib_base == dlbase )
 		{
-			libtable = symbolTables[i];
+			libtable = &symbolTables[i];
 			break;
 		}
 
 	if( libtable == NULL )
 	{
-		libtable = new LibSymbolTable( );
-		libtable->lib_base = dlbase;
-		libtable->last_pos = 0;
-		symbolTables.push_back( libtable );
+		symbolTables.push_back( LibSymbolTable( dlbase ) );
+		libtable = &symbolTables.back( );
 	}
 
 	std::map<std::string, void *> &table = libtable->table;
@@ -261,14 +244,16 @@ void *SymbolFinder::FindSymbol( void *handle, const char *symbol )
 	if( symbol_ptr != NULL )
 		return symbol_ptr;
 
-	struct mach_header *file_hdr = reinterpret_cast<struct mach_header *>( dlbase );
-	struct load_command *loadcmds = reinterpret_cast<struct load_command *>( dlbase + sizeof( struct mach_header ) );
+	segment_command *linkedit_hdr = NULL;
+	symtab_command *symtab_hdr = NULL;
+	mach_header *file_hdr = reinterpret_cast<mach_header *>( dlbase );
+	load_command *loadcmds = reinterpret_cast<load_command *>( dlbase + sizeof( mach_header ) );
 	uint32_t loadcmd_count = file_hdr->ncmds;
 	for( uint32_t i = 0; i < loadcmd_count; i++ )
 	{
 		if( loadcmds->cmd == LC_SEGMENT && linkedit_hdr == NULL )
 		{
-			struct segment_command *seg = reinterpret_cast<struct segment_command *>( loadcmds );
+			segment_command *seg = reinterpret_cast<segment_command *>( loadcmds );
 			if( strcmp( seg->segname, "__LINKEDIT" ) == 0 )
 			{
 				linkedit_hdr = seg;
@@ -278,25 +263,25 @@ void *SymbolFinder::FindSymbol( void *handle, const char *symbol )
 		}
 		else if( loadcmds->cmd == LC_SYMTAB )
 		{
-			symtab_hdr = reinterpret_cast<struct symtab_command *>( loadcmds );
+			symtab_hdr = reinterpret_cast<symtab_command *>( loadcmds );
 			if( linkedit_hdr != NULL )
 				break;
 		}
 
-		loadcmds = reinterpret_cast<struct load_command *>( reinterpret_cast<uintptr_t>( loadcmds ) + loadcmds->cmdsize );
+		loadcmds = reinterpret_cast<load_command *>( reinterpret_cast<uintptr_t>( loadcmds ) + loadcmds->cmdsize );
 	}
 
 	if( linkedit_hdr == NULL || symtab_hdr == NULL || symtab_hdr->symoff == 0 || symtab_hdr->stroff == 0 )
 		return 0;
 
 	uintptr_t linkedit_addr = dlbase + linkedit_hdr->vmaddr;
-	struct nlist *symtab = reinterpret_cast<struct nlist *>( linkedit_addr + symtab_hdr->symoff - linkedit_hdr->fileoff );
+	nlist *symtab = reinterpret_cast<nlist *>( linkedit_addr + symtab_hdr->symoff - linkedit_hdr->fileoff );
 	const char *strtab = reinterpret_cast<const char *>( linkedit_addr + symtab_hdr->stroff - linkedit_hdr->fileoff );
 	uint32_t symbol_count = symtab_hdr->nsyms;
 	void *symbol_pointer = NULL;
 	for( uint32_t i = libtable->last_pos; i < symbol_count; i++ )
 	{
-		struct nlist &sym = symtab[i];
+		nlist &sym = symtab[i];
 		const char *sym_name = strtab + sym.n_un.n_strx + 1;
 		if( sym.n_sect == NO_SECT )
 			continue;
@@ -332,7 +317,7 @@ void *SymbolFinder::FindSymbolFromBinary( const char *name, const char *symbol )
 
 #elif defined __linux || defined __APPLE__
 
-	void *binary = dlopen( name, RTLD_NOW | RTLD_LOCAL );
+	void *binary = dlopen( name, RTLD_LAZY | RTLD_NOLOAD );
 	if( binary != NULL )
 	{
 		void *symbol_pointer = FindSymbol( binary, symbol );
@@ -345,7 +330,7 @@ void *SymbolFinder::FindSymbolFromBinary( const char *name, const char *symbol )
 	return NULL;
 }
 
-void *SymbolFinder::Resolve( void *handle, const char *data, size_t len )
+void *SymbolFinder::Resolve( const void *handle, const char *data, size_t len )
 {
 	if( data[0] == '@' )
 		return FindSymbol( handle, ++data );
@@ -358,33 +343,18 @@ void *SymbolFinder::Resolve( void *handle, const char *data, size_t len )
 
 void *SymbolFinder::ResolveOnBinary( const char *name, const char *data, size_t len )
 {
+	if( data[0] == '@' )
+		return FindSymbolFromBinary( name, ++data );
 
-#if defined _WIN32
-
-	HMODULE binary = NULL;
-	if( GetModuleHandleEx( NULL, name, &binary ) == TRUE && binary != NULL )
-	{
-		void *symbol_pointer = Resolve( binary, data, len );
-		FreeModule( binary );
-		return symbol_pointer;
-	}
-
-#elif defined __linux || defined __APPLE__
-
-	void *binary = dlopen( name, RTLD_NOW | RTLD_LOCAL );
-	if( binary != NULL )
-	{
-		void *symbol_pointer = Resolve( binary, data, len );
-		dlclose( binary );
-		return symbol_pointer;
-	}
-
-#endif
+	if( len != 0 )
+		return FindPatternFromBinary( name, reinterpret_cast<const uint8_t *>( data ), len );
 
 	return NULL;
 }
 
-bool SymbolFinder::GetLibraryInfo( void *handle, DynLibInfo &lib )
+#include <dbg.h>
+
+bool SymbolFinder::GetLibraryInfo( const void *handle, DynLibInfo &lib )
 {
 	if( handle == NULL )
 		return false;
@@ -415,14 +385,8 @@ bool SymbolFinder::GetLibraryInfo( void *handle, DynLibInfo &lib )
 
 #elif defined __linux
 
-	Dl_info info;
-	if( dladdr( handle, &info ) == 0 )
-		return false;
-
-	if( info.dli_fbase == NULL || info.dli_fname == NULL )
-		return false;
-
-	uintptr_t baseAddr = reinterpret_cast<uintptr_t>( info.dli_fbase );
+	const link_map *map = static_cast<const link_map *>( handle );
+	uintptr_t baseAddr = reinterpret_cast<uintptr_t>( map->l_addr );
 	Elf32_Ehdr *file = reinterpret_cast<Elf32_Ehdr *>( baseAddr );
 	if( memcmp( ELFMAG, file->e_ident, SELFMAG ) != 0 )
 		return false;
@@ -450,15 +414,25 @@ bool SymbolFinder::GetLibraryInfo( void *handle, DynLibInfo &lib )
 
 #elif defined __APPLE__
 
-	Dl_info info;
-	if( dladdr( handle, &info ) == 0 )
+	uintptr_t baseAddr = 0;
+	for( uint32_t i = 1; i < m_ImageList->infoArrayCount; i++ )
+	{
+		const dyld_image_info &info = m_ImageList->infoArray[i];
+		void *h = dlopen( info.imageFilePath, RTLD_LAZY | RTLD_NOLOAD );
+		if( h == handle )
+		{
+			dlbase = reinterpret_cast<uintptr_t>( info.imageLoadAddress );
+			dlclose( h );
+			break;
+		}
+
+		dlclose( h );
+	}
+
+	if( baseAddr == 0 )
 		return false;
 
-	if( info.dli_fbase == NULL || info.dli_fname == NULL )
-		return false;
-
-	uintptr_t baseAddr = reinterpret_cast<uintptr_t>( info.dli_fbase );
-	struct mach_header *file = reinterpret_cast<struct mach_header *>( baseAddr );
+	mach_header *file = reinterpret_cast<mach_header *>( baseAddr );
 	if( file->magic != MH_MAGIC )
 		return false;
 
@@ -469,14 +443,14 @@ bool SymbolFinder::GetLibraryInfo( void *handle, DynLibInfo &lib )
 		return false;
 
 	uint32_t cmd_count = file->ncmds;
-	struct segment_command *seg = reinterpret_cast<struct segment_command *>( baseAddr + sizeof( struct mach_header ) );
+	segment_command *seg = reinterpret_cast<segment_command *>( baseAddr + sizeof( mach_header ) );
 
 	for( uint32_t i = 0; i < cmd_count; ++i )
 	{
 		if( seg->cmd == LC_SEGMENT )
 			lib.memorySize += seg->vmsize;
 
-		seg = reinterpret_cast<struct segment_command *>( reinterpret_cast<uintptr_t>( seg ) + seg->cmdsize );
+		seg = reinterpret_cast<segment_command *>( reinterpret_cast<uintptr_t>( seg ) + seg->cmdsize );
 	}
 
 #endif
