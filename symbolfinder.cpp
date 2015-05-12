@@ -352,8 +352,6 @@ void *SymbolFinder::ResolveOnBinary( const char *name, const char *data, size_t 
 	return NULL;
 }
 
-#include <dbg.h>
-
 bool SymbolFinder::GetLibraryInfo( const void *handle, DynLibInfo &lib )
 {
 	if( handle == NULL )
