@@ -22,7 +22,7 @@
 
 #elif defined __APPLE__
 
-#include <Gestalt.h>
+#import <CoreService/CoreService.h>
 #include <mach/task.h>
 #include <mach-o/dyld_images.h>
 #include <mach-o/loader.h>
