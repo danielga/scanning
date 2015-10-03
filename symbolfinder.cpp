@@ -2,32 +2,33 @@
 
 #if defined _WIN32
 
-	#define WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
 
-	#include <Windows.h>
+#include <Windows.h>
 
 #elif defined __linux
 
-	#include <sys/stat.h>
-	#include <fcntl.h>
-	#include <dlfcn.h>
-	#include <elf.h>
-	#include <link.h>
-	#include <string.h>
-	#include <sys/mman.h>
-	#include <unistd.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <dlfcn.h>
+#include <elf.h>
+#include <link.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <unistd.h>
 
-	#define PAGE_SIZE 4096
-	#define PAGE_ALIGN_UP( x ) ( ( x + PAGE_SIZE - 1 ) & ~( PAGE_SIZE - 1 ) )
+#define PAGE_SIZE 4096
+#define PAGE_ALIGN_UP( x ) ( ( x + PAGE_SIZE - 1 ) & ~( PAGE_SIZE - 1 ) )
 
 #elif defined __APPLE__
 
-	#include <mach/task.h>
-	#include <mach-o/dyld_images.h>
-	#include <mach-o/loader.h>
-	#include <mach-o/nlist.h>
-	#include <string.h>
-	#include <sys/mman.h>
+#include <Gestalt.h>
+#include <mach/task.h>
+#include <mach-o/dyld_images.h>
+#include <mach-o/loader.h>
+#include <mach-o/nlist.h>
+#include <string.h>
+#include <sys/mman.h>
 
 #endif
 
