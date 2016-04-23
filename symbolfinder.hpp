@@ -16,8 +16,8 @@ class SymbolFinder
 public:
 	SymbolFinder( );
 
-	void *FindPattern( const void *handle, const uint8_t *pattern, size_t len );
-	void *FindPatternFromBinary( const char *name, const uint8_t *pattern, size_t len );
+	static void *FindPattern( const void *handle, const uint8_t *pattern, size_t len );
+	static void *FindPatternFromBinary( const char *name, const uint8_t *pattern, size_t len );
 	void *FindSymbol( const void *handle, const char *symbol );
 	void *FindSymbolFromBinary( const char *name, const char *symbol );
 
@@ -26,7 +26,7 @@ public:
 	void *ResolveOnBinary( const char *name, const char *data, size_t len = 0 );
 
 private:
-	bool GetLibraryInfo( const void *handle, struct DynLibInfo &info );
+	static bool GetLibraryInfo( const void *handle, struct DynLibInfo &info );
 
 #if defined __linux || defined __APPLE__
 

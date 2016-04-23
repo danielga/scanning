@@ -75,10 +75,9 @@ void *SymbolFinder::FindPattern( const void *handle, const uint8_t *pattern, siz
 
 	uint8_t *ptr = reinterpret_cast<uint8_t *>( lib.baseAddress );
 	uint8_t *end = ptr + lib.memorySize - len;
-	bool found = false;
+	bool found = true;
 	while( ptr < end )
 	{
-		found = true;
 		for( size_t i = 0; i < len; ++i )
 			if( pattern[i] != '\x2A' && pattern[i] != ptr[i] )
 			{
@@ -90,6 +89,7 @@ void *SymbolFinder::FindPattern( const void *handle, const uint8_t *pattern, siz
 			return ptr;
 
 		++ptr;
+		found = true;
 	}
 
 	return nullptr;
