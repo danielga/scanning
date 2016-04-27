@@ -22,13 +22,14 @@
 
 #elif defined __APPLE__
 
-#import <CoreService/CoreService.h>
+#import <CoreServices/CoreServices.h>
 #include <mach/task.h>
 #include <mach-o/dyld_images.h>
 #include <mach-o/loader.h>
 #include <mach-o/nlist.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <dlfcn.h>
 
 #endif
 
@@ -55,7 +56,7 @@ SymbolFinder::SymbolFinder( )
 	}
 	else
 	{
-		nlist list[2];
+		struct nlist list[2];
 		memset( list, 0, sizeof( list ) );
 		list[0].n_un.n_name = "_dyld_all_image_infos";
 		nlist( "/usr/lib/dyld", list );
@@ -225,7 +226,7 @@ void *SymbolFinder::FindSymbol( const void *handle, const char *symbol )
 	if( !GetLibraryInfo( handle, lib ) )
 		return nullptr;
 
-	uintptr_t dlbase = lib.baseAddress;
+	uintptr_t dlbase = reinterpret_cast<uintptr_t>( lib.baseAddress );
 	LibSymbolTable *libtable = nullptr;
 	for( size_t i = 0; i < symbolTables.size( ); ++i )
 		if( symbolTables[i].lib_base == dlbase )
@@ -276,18 +277,18 @@ void *SymbolFinder::FindSymbol( const void *handle, const char *symbol )
 		return 0;
 
 	uintptr_t linkedit_addr = dlbase + linkedit_hdr->vmaddr;
-	nlist *symtab = reinterpret_cast<nlist *>( linkedit_addr + symtab_hdr->symoff - linkedit_hdr->fileoff );
+	struct nlist *symtab = reinterpret_cast<struct nlist *>( linkedit_addr + symtab_hdr->symoff - linkedit_hdr->fileoff );
 	const char *strtab = reinterpret_cast<const char *>( linkedit_addr + symtab_hdr->stroff - linkedit_hdr->fileoff );
 	uint32_t symbol_count = symtab_hdr->nsyms;
 	void *symbol_pointer = nullptr;
 	for( uint32_t i = libtable->last_pos; i < symbol_count; i++ )
 	{
-		nlist &sym = symtab[i];
+		struct nlist &sym = symtab[i];
 		const char *sym_name = strtab + sym.n_un.n_strx + 1;
 		if( sym.n_sect == NO_SECT )
 			continue;
 
-		void *symptr = reinterpret_cast<void *>( dlmap->l_addr + sym.st_value );
+		void *symptr = reinterpret_cast<void *>( dlbase + sym.n_value );
 		table[sym_name] = symptr;
 		if( strcmp( sym_name, symbol ) == 0 )
 		{
@@ -414,13 +415,13 @@ bool SymbolFinder::GetLibraryInfo( const void *handle, DynLibInfo &lib )
 #elif defined __APPLE__
 
 	uintptr_t baseAddr = 0;
-	for( uint32_t i = 1; i < m_ImageList->infoArrayCount; i++ )
+	for( uint32_t i = 1; i < m_ImageList->infoArrayCount; ++i )
 	{
 		const dyld_image_info &info = m_ImageList->infoArray[i];
 		void *h = dlopen( info.imageFilePath, RTLD_LAZY | RTLD_NOLOAD );
 		if( h == handle )
 		{
-			dlbase = reinterpret_cast<uintptr_t>( info.imageLoadAddress );
+			baseAddr = reinterpret_cast<uintptr_t>( info.imageLoadAddress );
 			dlclose( h );
 			break;
 		}
