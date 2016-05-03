@@ -31,6 +31,34 @@
 #include <sys/mman.h>
 #include <dlfcn.h>
 
+#ifndef MAC_OS_X_VERSION_10_6
+
+#define MAC_OS_X_VERSION_10_6 1060
+
+#endif
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_6
+
+// borrowed from Breakpad
+// Fallback declarations for TASK_DYLD_INFO and friends, introduced in
+// <mach/task_info.h> in the Mac OS X 10.6 SDK.
+
+#define TASK_DYLD_INFO 17
+
+struct task_dyld_info
+{
+	mach_vm_address_t all_image_info_addr;
+	mach_vm_size_t all_image_info_size;
+};
+
+typedef struct task_dyld_info task_dyld_info_data_t;
+
+typedef struct task_dyld_info *task_dyld_info_t;
+
+#define TASK_DYLD_INFO_COUNT ( sizeof( task_dyld_info_data_t ) / sizeof( natural_t ) )
+
+#endif
+
 #endif
 
 struct DynLibInfo
@@ -52,7 +80,7 @@ SymbolFinder::SymbolFinder( )
 		task_dyld_info_data_t dyld_info;
 		mach_msg_type_number_t count = TASK_DYLD_INFO_COUNT;
 		task_info( mach_task_self( ), TASK_DYLD_INFO, reinterpret_cast<task_info_t>( &dyld_info ), &count );
-		m_ImageList = reinterpret_cast<dyld_all_image_infos *>( dyld_info.all_image_info_addr );
+		m_ImageList = reinterpret_cast<struct dyld_all_image_infos *>( dyld_info.all_image_info_addr );
 	}
 	else
 	{
@@ -60,7 +88,7 @@ SymbolFinder::SymbolFinder( )
 		memset( list, 0, sizeof( list ) );
 		list[0].n_un.n_name = "_dyld_all_image_infos";
 		nlist( "/usr/lib/dyld", list );
-		m_ImageList = reinterpret_cast<dyld_all_image_infos *>( list[0].n_value );
+		m_ImageList = reinterpret_cast<struct dyld_all_image_infos *>( list[0].n_value );
 	}
 
 #endif
