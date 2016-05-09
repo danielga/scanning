@@ -3,11 +3,20 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#if !defined _WIN32
+#if defined __linux || defined __APPLE__
 
 #include <vector>
-#include <map>
 #include <string>
+
+#if defined __APPLE__ && !defined MAC_OS_X_VERSION_10_7
+
+#include <map>
+
+#else
+
+#include <unordered_map>
+
+#endif
 
 #endif
 
@@ -30,23 +39,28 @@ private:
 
 #if defined __linux || defined __APPLE__
 
+#if defined __APPLE__ && !defined MAC_OS_X_VERSION_10_7
+
+    typedef std::map<std::string, void *> SymbolTable;
+
+#else
+
+    typedef std::unordered_map<std::string, void *> SymbolTable;
+
+#endif
+
 	struct LibSymbolTable
 	{
 		LibSymbolTable( uintptr_t base ) :
 			table( ), lib_base( base ), last_pos( 0 )
 		{ }
 
-		std::map<std::string, void *> table;
+		SymbolTable table;
 		uintptr_t lib_base;
 		uint32_t last_pos;
 	};
 
 	std::vector<LibSymbolTable> symbolTables;
-
-#endif
-
-#if defined __APPLE__
-
 	struct dyld_all_image_infos *m_ImageList;
 	long m_OSXMajor;
 	long m_OSXMinor;
