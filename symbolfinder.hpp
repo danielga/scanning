@@ -25,14 +25,14 @@ class SymbolFinder
 public:
 	SymbolFinder( );
 
-	void *FindPattern( const void *handle, const uint8_t *pattern, size_t len );
-	void *FindPatternFromBinary( const char *name, const uint8_t *pattern, size_t len );
+	void *FindPattern( const void *handle, const uint8_t *pattern, size_t len, void *start = nullptr );
+	void *FindPatternFromBinary( const char *name, const uint8_t *pattern, size_t len, void *start = nullptr );
 	void *FindSymbol( const void *handle, const char *symbol );
 	void *FindSymbolFromBinary( const char *name, const char *symbol );
 
 	// data can be a symbol name (if appended by @) or a pattern
-	void *Resolve( const void *handle, const char *data, size_t len = 0 );
-	void *ResolveOnBinary( const char *name, const char *data, size_t len = 0 );
+	void *Resolve( const void *handle, const char *data, size_t len = 0, void *start = nullptr );
+	void *ResolveOnBinary( const char *name, const char *data, size_t len = 0, void *start = nullptr );
 
 private:
 	bool GetLibraryInfo( const void *handle, struct DynLibInfo &info );
