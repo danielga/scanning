@@ -28,29 +28,14 @@ This library is licensed under the BSD license. See the file COPYING.
 	#undef SUPPORT_64BIT_OFFSET
 #endif
 
+#include <stdint.h>
+
 /* If your compiler doesn't support stdint.h, define your own 64 bits type. */
 #ifdef SUPPORT_64BIT_OFFSET
-	#ifdef _MSC_VER
-		#define OFFSET_INTEGER unsigned __int64
-	#else
-		#include <stdint.h>
-		#define OFFSET_INTEGER uint64_t
-	#endif
+	#define OFFSET_INTEGER uint64_t
 #else
 	/* 32 bit offsets are used. */
-	#define OFFSET_INTEGER unsigned long
-#endif
-
-#ifdef _MSC_VER
-/* Since MSVC isn't shipped with stdint.h, we will have our own: */
-typedef signed __int64		int64_t;
-typedef unsigned __int64	uint64_t;
-typedef signed __int32		int32_t;
-typedef unsigned __int32	uint32_t;
-typedef signed __int16		int16_t;
-typedef unsigned __int16	uint16_t;
-typedef signed __int8		int8_t;
-typedef unsigned __int8		uint8_t;
+	#define OFFSET_INTEGER uint32_t
 #endif
 
 /* Support C++ compilers */
