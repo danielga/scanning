@@ -23,11 +23,6 @@ This library is licensed under the BSD license. See the file COPYING.
  * Turned on by default!
  */
 
-#if !(defined(DISTORM_STATIC) || defined(DISTORM_DYNAMIC))
-	/* Define this macro for outer projects by default. */
-	//#define SUPPORT_64BIT_OFFSET
-#endif
-
 /* TINYC has a problem with some 64bits library functions, so ignore 64 bit offsets. */
 #ifdef __TINYC__
 	#undef SUPPORT_64BIT_OFFSET
