@@ -89,14 +89,14 @@ SymbolFinder::SymbolFinder( )
 
 }
 
-void *SymbolFinder::FindPattern( const void *handle, const uint8_t *pattern, size_t len, void *start )
+void *SymbolFinder::FindPattern( const void *handle, const uint8_t *pattern, size_t len, const void *start )
 {
 	DynLibInfo lib;
 	memset( &lib, 0, sizeof( DynLibInfo ) );
 	if( !GetLibraryInfo( handle, lib ) )
 		return nullptr;
 
-	uint8_t *ptr = reinterpret_cast<uint8_t *>( start > lib.baseAddress ? start : lib.baseAddress );
+	uint8_t *ptr = reinterpret_cast<uint8_t *>( start > lib.baseAddress ? const_cast<void *>( start ) : lib.baseAddress );
 	uint8_t *end = reinterpret_cast<uint8_t *>( lib.baseAddress ) + lib.memorySize - len;
 	bool found = true;
 	while( ptr < end )
@@ -118,7 +118,7 @@ void *SymbolFinder::FindPattern( const void *handle, const uint8_t *pattern, siz
 	return nullptr;
 }
 
-void *SymbolFinder::FindPatternFromBinary( const char *name, const uint8_t *pattern, size_t len, void *start )
+void *SymbolFinder::FindPatternFromBinary( const char *name, const uint8_t *pattern, size_t len, const void *start )
 {
 
 #if defined _WIN32
@@ -354,7 +354,7 @@ void *SymbolFinder::FindSymbolFromBinary( const char *name, const char *symbol )
 	return nullptr;
 }
 
-void *SymbolFinder::Resolve( const void *handle, const char *data, size_t len, void *start )
+void *SymbolFinder::Resolve( const void *handle, const char *data, size_t len, const void *start )
 {
 	if( data[0] == '@' )
 		return FindSymbol( handle, ++data );
@@ -365,7 +365,7 @@ void *SymbolFinder::Resolve( const void *handle, const char *data, size_t len, v
 	return nullptr;
 }
 
-void *SymbolFinder::ResolveOnBinary( const char *name, const char *data, size_t len, void *start )
+void *SymbolFinder::ResolveOnBinary( const char *name, const char *data, size_t len, const void *start )
 {
 	if( data[0] == '@' )
 		return FindSymbolFromBinary( name, ++data );
