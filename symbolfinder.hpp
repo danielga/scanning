@@ -8,9 +8,13 @@
 #include <vector>
 #include <string>
 
-#if defined __APPLE__ && !defined MAC_OS_X_VERSION_10_7
+#if !defined __clang__ && \
+	defined __GNUC__ && \
+	( __GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__ ) < 40300
 
 #include <map>
+
+#define BAD_GCC_VERSION
 
 #else
 
@@ -39,13 +43,13 @@ private:
 
 #if defined __linux || defined __APPLE__
 
-#if defined __APPLE__ && !defined MAC_OS_X_VERSION_10_7
+#ifdef BAD_GCC_VERSION
 
-    typedef std::map<std::string, void *> SymbolTable;
+	typedef std::map<std::string, void *> SymbolTable;
 
 #else
 
-    typedef std::unordered_map<std::string, void *> SymbolTable;
+	typedef std::unordered_map<std::string, void *> SymbolTable;
 
 #endif
 
@@ -68,3 +72,5 @@ private:
 #endif
 
 };
+
+#undef BAD_GCC_VERSION
