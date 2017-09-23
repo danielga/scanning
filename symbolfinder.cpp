@@ -1,12 +1,12 @@
 #include "symbolfinder.hpp"
 
-#if defined _WIN32
+#if defined SYSTEM_WINDOWS
 
 #define WIN32_LEAN_AND_MEAN
 
 #include <Windows.h>
 
-#elif defined __linux
+#elif defined SYSTEM_LINUX
 
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -20,7 +20,7 @@
 #define PAGE_SIZE 4096
 #define PAGE_ALIGN_UP( x ) ( ( x + PAGE_SIZE - 1 ) & ~( PAGE_SIZE - 1 ) )
 
-#elif defined __APPLE__
+#elif defined SYSTEM_MACOSX
 
 #import <CoreServices/CoreServices.h>
 #include <mach/task.h>
@@ -64,7 +64,7 @@ struct DynLibInfo
 SymbolFinder::SymbolFinder( )
 {
 
-#if defined __APPLE__
+#if defined SYSTEM_MACOSX
 
 	Gestalt( gestaltSystemVersionMajor, &m_OSXMajor );
 	Gestalt( gestaltSystemVersionMinor, &m_OSXMinor );
@@ -121,7 +121,7 @@ void *SymbolFinder::FindPattern( const void *handle, const uint8_t *pattern, siz
 void *SymbolFinder::FindPatternFromBinary( const char *name, const uint8_t *pattern, size_t len, const void *start )
 {
 
-#if defined _WIN32
+#if defined SYSTEM_WINDOWS
 
 	HMODULE binary = nullptr;
 	if( GetModuleHandleEx( 0, name, &binary ) == TRUE && binary != nullptr )
@@ -131,7 +131,7 @@ void *SymbolFinder::FindPatternFromBinary( const char *name, const uint8_t *patt
 		return symbol_pointer;
 	}
 
-#elif defined __linux || defined __APPLE__
+#elif defined SYSTEM_POSIX
 
 	void *binary = dlopen( name, RTLD_LAZY | RTLD_NOLOAD );
 	if( binary != nullptr)
@@ -149,11 +149,11 @@ void *SymbolFinder::FindPatternFromBinary( const char *name, const uint8_t *patt
 void *SymbolFinder::FindSymbol( const void *handle, const char *symbol )
 {
 
-#if defined _WIN32
+#if defined SYSTEM_WINDOWS
 
 	return GetProcAddress( reinterpret_cast<HMODULE>( const_cast<void *>( handle ) ), symbol );
 
-#elif defined __linux
+#elif defined SYSTEM_LINUX
 
 	const struct link_map *dlmap = reinterpret_cast<const struct link_map *>( handle );
 	LibSymbolTable *libtable = nullptr;
@@ -242,7 +242,7 @@ void *SymbolFinder::FindSymbol( const void *handle, const char *symbol )
 	munmap( file_hdr, dlstat.st_size );
 	return symbol_pointer;
 
-#elif defined __APPLE__
+#elif defined SYSTEM_MACOSX
 
 	DynLibInfo lib;
 	if( !GetLibraryInfo( handle, lib ) )
@@ -329,7 +329,7 @@ void *SymbolFinder::FindSymbol( const void *handle, const char *symbol )
 void *SymbolFinder::FindSymbolFromBinary( const char *name, const char *symbol )
 {
 
-#if defined _WIN32
+#if defined SYSTEM_WINDOWS
 
 	HMODULE binary = nullptr;
 	if( GetModuleHandleEx( 0, name, &binary ) == TRUE && binary != nullptr )
@@ -339,7 +339,7 @@ void *SymbolFinder::FindSymbolFromBinary( const char *name, const char *symbol )
 		return symbol_pointer;
 	}
 
-#elif defined __linux || defined __APPLE__
+#elif defined SYSTEM_POSIX
 
 	void *binary = dlopen( name, RTLD_LAZY | RTLD_NOLOAD );
 	if( binary != nullptr )
@@ -381,7 +381,7 @@ bool SymbolFinder::GetLibraryInfo( const void *handle, DynLibInfo &lib )
 	if( handle == nullptr )
 		return false;
 
-#if defined _WIN32
+#if defined SYSTEM_WINDOWS
 
 	MEMORY_BASIC_INFORMATION info;
 	if( VirtualQuery( handle, &info, sizeof( info ) ) == FALSE )
@@ -405,7 +405,7 @@ bool SymbolFinder::GetLibraryInfo( const void *handle, DynLibInfo &lib )
 
 	lib.memorySize = opt->SizeOfImage;
 
-#elif defined __linux
+#elif defined SYSTEM_LINUX
 
 	const struct link_map *map = static_cast<const struct link_map *>( handle );
 	uintptr_t baseAddr = reinterpret_cast<uintptr_t>( map->l_addr );
@@ -434,7 +434,7 @@ bool SymbolFinder::GetLibraryInfo( const void *handle, DynLibInfo &lib )
 		}
 	}
 
-#elif defined __APPLE__
+#elif defined SYSTEM_MACOSX
 
 	uintptr_t baseAddr = 0;
 	for( uint32_t i = 1; i < m_ImageList->infoArrayCount; ++i )

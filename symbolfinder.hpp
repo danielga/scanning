@@ -2,19 +2,16 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "../Platform.hpp"
 
-#if defined __linux || defined __APPLE__
+#ifdef SYSTEM_POSIX
 
 #include <vector>
 #include <string>
 
-#if !defined __clang__ && \
-	defined __GNUC__ && \
-	( __GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__ ) < 40300
+#ifdef SYSTEM_MACOSX_BAD
 
 #include <map>
-
-#define BAD_GCC_VERSION
 
 #else
 
@@ -41,9 +38,9 @@ public:
 private:
 	bool GetLibraryInfo( const void *handle, struct DynLibInfo &info );
 
-#if defined __linux || defined __APPLE__
+#ifdef SYSTEM_POSIX
 
-#ifdef BAD_GCC_VERSION
+#ifdef SYSTEM_MACOSX_BAD
 
 	typedef std::map<std::string, void *> SymbolTable;
 
@@ -65,12 +62,15 @@ private:
 	};
 
 	std::vector<LibSymbolTable> symbolTables;
+
+#ifdef SYSTEM_MACOSX
+
 	struct dyld_all_image_infos *m_ImageList;
 	long m_OSXMajor;
 	long m_OSXMinor;
 
 #endif
 
-};
+#endif
 
-#undef BAD_GCC_VERSION
+};
