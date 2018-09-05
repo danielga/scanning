@@ -1,23 +1,14 @@
 #pragma once
 
-#include <stdint.h>
-#include <stddef.h>
-#include "../Platform.hpp"
+#include <cstdint>
+#include <cstddef>
+#include "platform.hpp"
 
 #ifdef SYSTEM_POSIX
 
 #include <vector>
 #include <string>
-
-#ifdef SYSTEM_MACOSX_BAD
-
-#include <map>
-
-#else
-
 #include <unordered_map>
-
-#endif
 
 #endif
 
@@ -39,16 +30,7 @@ private:
 	bool GetLibraryInfo( const void *handle, struct DynLibInfo &info );
 
 #ifdef SYSTEM_POSIX
-
-#ifdef SYSTEM_MACOSX_BAD
-
-	typedef std::map<std::string, void *> SymbolTable;
-
-#else
-
 	typedef std::unordered_map<std::string, void *> SymbolTable;
-
-#endif
 
 	struct LibSymbolTable
 	{
