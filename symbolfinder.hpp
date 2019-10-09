@@ -48,8 +48,6 @@ private:
 #ifdef SYSTEM_MACOSX
 
 	struct dyld_all_image_infos *m_ImageList;
-	long m_OSXMajor;
-	long m_OSXMinor;
 
 #endif
 
