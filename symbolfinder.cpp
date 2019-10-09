@@ -1,4 +1,5 @@
 #include "symbolfinder.hpp"
+#include "platform.hpp"
 
 #if defined SYSTEM_WINDOWS
 
@@ -31,28 +32,6 @@
 #include <sys/mman.h>
 #include <dlfcn.h>
 
-#if !defined MAC_OS_X_VERSION_10_6
-
-// borrowed from Breakpad
-// Fallback declarations for TASK_DYLD_INFO and friends, introduced in
-// <mach/task_info.h> in the Mac OS X 10.6 SDK.
-
-#define TASK_DYLD_INFO 17
-
-struct task_dyld_info
-{
-	mach_vm_address_t all_image_info_addr;
-	mach_vm_size_t all_image_info_size;
-};
-
-typedef struct task_dyld_info task_dyld_info_data_t;
-
-typedef struct task_dyld_info *task_dyld_info_t;
-
-#define TASK_DYLD_INFO_COUNT ( sizeof( task_dyld_info_data_t ) / sizeof( natural_t ) )
-
-#endif
-
 #endif
 
 struct DynLibInfo
@@ -66,24 +45,10 @@ SymbolFinder::SymbolFinder( )
 
 #if defined SYSTEM_MACOSX
 
-	Gestalt( gestaltSystemVersionMajor, &m_OSXMajor );
-	Gestalt( gestaltSystemVersionMinor, &m_OSXMinor );
-
-	if( ( m_OSXMajor == 10 && m_OSXMinor >= 6 ) || m_OSXMajor > 10 )
-	{
-		task_dyld_info_data_t dyld_info;
-		mach_msg_type_number_t count = TASK_DYLD_INFO_COUNT;
-		task_info( mach_task_self( ), TASK_DYLD_INFO, reinterpret_cast<task_info_t>( &dyld_info ), &count );
-		m_ImageList = reinterpret_cast<struct dyld_all_image_infos *>( dyld_info.all_image_info_addr );
-	}
-	else
-	{
-		struct nlist list[2];
-		memset( list, 0, sizeof( list ) );
-		list[0].n_un.n_name = const_cast<char *>( "_dyld_all_image_infos" );
-		nlist( "/usr/lib/dyld", list );
-		m_ImageList = reinterpret_cast<struct dyld_all_image_infos *>( list[0].n_value );
-	}
+	task_dyld_info_data_t dyld_info;
+	mach_msg_type_number_t count = TASK_DYLD_INFO_COUNT;
+	task_info( mach_task_self( ), TASK_DYLD_INFO, reinterpret_cast<task_info_t>( &dyld_info ), &count );
+	m_ImageList = reinterpret_cast<struct dyld_all_image_infos *>( dyld_info.all_image_info_addr );
 
 #endif
 
@@ -155,6 +120,22 @@ void *SymbolFinder::FindSymbol( const void *handle, const char *symbol )
 
 #elif defined SYSTEM_LINUX
 
+#if defined ARCHITECTURE_X86
+	
+	typedef Elf32_Ehdr Elf_Ehdr;
+	typedef Elf32_Shdr Elf_Shdr;
+	typedef Elf32_Sym Elf_Sym;
+#define ELF_ST_TYPE ELF32_ST_TYPE
+	
+#elif defined ARCHITECTURE_X86_64
+	
+	typedef Elf64_Ehdr Elf_Ehdr;
+	typedef Elf64_Shdr Elf_Shdr;
+	typedef Elf64_Sym Elf_Sym;
+#define ELF_ST_TYPE ELF64_ST_TYPE
+	
+#endif
+	
 	const struct link_map *dlmap = reinterpret_cast<const struct link_map *>( handle );
 	LibSymbolTable *libtable = nullptr;
 	for( size_t i = 0; i < symbolTables.size( ); ++i )
@@ -183,7 +164,7 @@ void *SymbolFinder::FindSymbol( const void *handle, const char *symbol )
 		return nullptr;
 	}
 
-	Elf32_Ehdr *file_hdr = reinterpret_cast<Elf32_Ehdr *>( mmap( 0, dlstat.st_size, PROT_READ, MAP_PRIVATE, dlfile, 0 ) );
+	Elf_Ehdr *file_hdr = reinterpret_cast<Elf_Ehdr *>( mmap( 0, dlstat.st_size, PROT_READ, MAP_PRIVATE, dlfile, 0 ) );
 	uintptr_t map_base = reinterpret_cast<uintptr_t>( file_hdr );
 	close( dlfile );
 	if( file_hdr == MAP_FAILED )
@@ -195,14 +176,14 @@ void *SymbolFinder::FindSymbol( const void *handle, const char *symbol )
 		return nullptr;
 	}
 
-	Elf32_Shdr *symtab_hdr = nullptr, *strtab_hdr = nullptr;
-	Elf32_Shdr *sections = reinterpret_cast<Elf32_Shdr *>( map_base + file_hdr->e_shoff );
+	Elf_Shdr *symtab_hdr = nullptr, *strtab_hdr = nullptr;
+	Elf_Shdr *sections = reinterpret_cast<Elf_Shdr *>( map_base + file_hdr->e_shoff );
 	uint16_t section_count = file_hdr->e_shnum;
-	Elf32_Shdr *shstrtab_hdr = &sections[file_hdr->e_shstrndx];
+	Elf_Shdr *shstrtab_hdr = &sections[file_hdr->e_shstrndx];
 	const char *shstrtab = reinterpret_cast<const char *>( map_base + shstrtab_hdr->sh_offset );
 	for( uint16_t i = 0; i < section_count; i++ )
 	{
-		Elf32_Shdr &hdr = sections[i];
+		Elf_Shdr &hdr = sections[i];
 		const char *section_name = shstrtab + hdr.sh_name;
 		if( strcmp( section_name, ".symtab" ) == 0 )
 			symtab_hdr = &hdr;
@@ -216,14 +197,14 @@ void *SymbolFinder::FindSymbol( const void *handle, const char *symbol )
 		return nullptr;
 	}
 
-	Elf32_Sym *symtab = reinterpret_cast<Elf32_Sym *>( map_base + symtab_hdr->sh_offset );
+	Elf_Sym *symtab = reinterpret_cast<Elf_Sym *>( map_base + symtab_hdr->sh_offset );
 	const char *strtab = reinterpret_cast<const char *>( map_base + strtab_hdr->sh_offset );
 	uint32_t symbol_count = symtab_hdr->sh_size / symtab_hdr->sh_entsize;
 	void *symbol_pointer = nullptr;
 	for( uint32_t i = libtable->last_pos; i < symbol_count; i++ )
 	{
-		Elf32_Sym &sym = symtab[i];
-		uint8_t sym_type = ELF32_ST_TYPE( sym.st_info );
+		Elf_Sym &sym = symtab[i];
+		uint8_t sym_type = ELF_ST_TYPE( sym.st_info );
 		const char *sym_name = strtab + sym.st_name;
 
 		if( sym.st_shndx == SHN_UNDEF || ( sym_type != STT_FUNC && sym_type != STT_OBJECT ) )
@@ -243,6 +224,25 @@ void *SymbolFinder::FindSymbol( const void *handle, const char *symbol )
 	return symbol_pointer;
 
 #elif defined SYSTEM_MACOSX
+
+#if defined ARCHITECTURE_X86
+	
+	typedef struct mach_header mach_header_t;
+	typedef struct segment_command segment_command_t;
+	typedef struct nlist nlist_t;
+	const uint32_t LC_SEGMENT_VALUE = LC_SEGMENT;
+	
+#elif defined ARCHITECTURE_X86_64
+	
+	typedef struct mach_header_64 mach_header_t;
+	typedef struct segment_command_64 segment_command_t;
+	typedef struct nlist_64 nlist_t;
+	const uint32_t LC_SEGMENT_VALUE = LC_SEGMENT_64;
+	
+#endif
+
+	typedef struct load_command load_command_t;
+	typedef struct symtab_command symtab_command_t;
 
 	DynLibInfo lib;
 	if( !GetLibraryInfo( handle, lib ) )
@@ -268,16 +268,16 @@ void *SymbolFinder::FindSymbol( const void *handle, const char *symbol )
 	if( symbol_ptr != nullptr)
 		return symbol_ptr;
 
-	struct segment_command *linkedit_hdr = nullptr;
-	struct symtab_command *symtab_hdr = nullptr;
-	struct mach_header *file_hdr = reinterpret_cast<struct mach_header *>( dlbase );
-	struct load_command *loadcmds = reinterpret_cast<struct load_command *>( dlbase + sizeof( mach_header ) );
+	segment_command_t *linkedit_hdr = nullptr;
+	symtab_command_t *symtab_hdr = nullptr;
+	mach_header_t *file_hdr = reinterpret_cast<mach_header_t *>( dlbase );
+	load_command_t *loadcmds = reinterpret_cast<load_command_t *>( dlbase + sizeof( mach_header_t ) );
 	uint32_t loadcmd_count = file_hdr->ncmds;
 	for( uint32_t i = 0; i < loadcmd_count; i++ )
 	{
-		if( loadcmds->cmd == LC_SEGMENT && linkedit_hdr == nullptr)
+		if( loadcmds->cmd == LC_SEGMENT_VALUE && linkedit_hdr == nullptr )
 		{
-			struct segment_command *seg = reinterpret_cast<struct segment_command *>( loadcmds );
+			segment_command_t *seg = reinterpret_cast<segment_command_t *>( loadcmds );
 			if( strcmp( seg->segname, "__LINKEDIT" ) == 0 )
 			{
 				linkedit_hdr = seg;
@@ -287,25 +287,25 @@ void *SymbolFinder::FindSymbol( const void *handle, const char *symbol )
 		}
 		else if( loadcmds->cmd == LC_SYMTAB )
 		{
-			symtab_hdr = reinterpret_cast<struct symtab_command *>( loadcmds );
+			symtab_hdr = reinterpret_cast<symtab_command_t *>( loadcmds );
 			if( linkedit_hdr != nullptr)
 				break;
 		}
 
-		loadcmds = reinterpret_cast<struct load_command *>( reinterpret_cast<uintptr_t>( loadcmds ) + loadcmds->cmdsize );
+		loadcmds = reinterpret_cast<load_command_t *>( reinterpret_cast<uintptr_t>( loadcmds ) + loadcmds->cmdsize );
 	}
 
 	if( linkedit_hdr == nullptr || symtab_hdr == nullptr || symtab_hdr->symoff == 0 || symtab_hdr->stroff == 0 )
 		return 0;
 
 	uintptr_t linkedit_addr = dlbase + linkedit_hdr->vmaddr;
-	struct nlist *symtab = reinterpret_cast<struct nlist *>( linkedit_addr + symtab_hdr->symoff - linkedit_hdr->fileoff );
+	nlist_t *symtab = reinterpret_cast<nlist_t *>( linkedit_addr + symtab_hdr->symoff - linkedit_hdr->fileoff );
 	const char *strtab = reinterpret_cast<const char *>( linkedit_addr + symtab_hdr->stroff - linkedit_hdr->fileoff );
 	uint32_t symbol_count = symtab_hdr->nsyms;
 	void *symbol_pointer = nullptr;
 	for( uint32_t i = libtable->last_pos; i < symbol_count; i++ )
 	{
-		struct nlist &sym = symtab[i];
+		nlist_t &sym = symtab[i];
 		const char *sym_name = strtab + sym.n_un.n_strx + 1;
 		if( sym.n_sect == NO_SECT )
 			continue;
@@ -383,6 +383,16 @@ bool SymbolFinder::GetLibraryInfo( const void *handle, DynLibInfo &lib )
 
 #if defined SYSTEM_WINDOWS
 
+#if defined ARCHITECTURE_X86
+	
+	const WORD IMAGE_FILE_MACHINE = IMAGE_FILE_MACHINE_I386;
+	
+#elif defined ARCHITECTURE_X86_64
+	
+	const WORD IMAGE_FILE_MACHINE = IMAGE_FILE_MACHINE_AMD64;
+	
+#endif
+
 	MEMORY_BASIC_INFORMATION info;
 	if( VirtualQuery( handle, &info, sizeof( info ) ) == FALSE )
 		return false;
@@ -394,10 +404,10 @@ bool SymbolFinder::GetLibraryInfo( const void *handle, DynLibInfo &lib )
 	IMAGE_FILE_HEADER *file = &pe->FileHeader;
 	IMAGE_OPTIONAL_HEADER *opt = &pe->OptionalHeader;
 
-	if( dos->e_magic != IMAGE_DOS_SIGNATURE || pe->Signature != IMAGE_NT_SIGNATURE || opt->Magic != IMAGE_NT_OPTIONAL_HDR32_MAGIC )
+	if( dos->e_magic != IMAGE_DOS_SIGNATURE || pe->Signature != IMAGE_NT_SIGNATURE || opt->Magic != IMAGE_NT_OPTIONAL_HDR_MAGIC )
 		return false;
 
-	if( file->Machine != IMAGE_FILE_MACHINE_I386 )
+	if( file->Machine != IMAGE_FILE_MACHINE )
 		return false;
 
 	if( ( file->Characteristics & IMAGE_FILE_DLL ) == 0 )
@@ -407,26 +417,42 @@ bool SymbolFinder::GetLibraryInfo( const void *handle, DynLibInfo &lib )
 
 #elif defined SYSTEM_LINUX
 
+#if defined ARCHITECTURE_X86
+	
+	typedef Elf32_Ehdr Elf_Ehdr;
+	typedef Elf32_Phdr Elf_Phdr;
+	const unsigned char ELFCLASS = ELFCLASS32;
+	const uint16_t EM = EM_386;
+	
+#elif defined ARCHITECTURE_X86_64
+	
+	typedef Elf64_Ehdr Elf_Ehdr;
+	typedef Elf64_Phdr Elf_Phdr;
+	const unsigned char ELFCLASS = ELFCLASS64;
+	const uint16_t EM = EM_X86_64;
+	
+#endif
+	
 	const struct link_map *map = static_cast<const struct link_map *>( handle );
 	uintptr_t baseAddr = reinterpret_cast<uintptr_t>( map->l_addr );
-	Elf32_Ehdr *file = reinterpret_cast<Elf32_Ehdr *>( baseAddr );
+	Elf_Ehdr *file = reinterpret_cast<Elf_Ehdr *>( baseAddr );
 	if( memcmp( ELFMAG, file->e_ident, SELFMAG ) != 0 )
 		return false;
 
 	if( file->e_ident[EI_VERSION] != EV_CURRENT )
 		return false;
 
-	if( file->e_ident[EI_CLASS] != ELFCLASS32 || file->e_machine != EM_386 || file->e_ident[EI_DATA] != ELFDATA2LSB )
+	if( file->e_ident[EI_CLASS] != ELFCLASS || file->e_machine != EM || file->e_ident[EI_DATA] != ELFDATA2LSB )
 		return false;
 
 	if( file->e_type != ET_DYN )
 		return false;
 
 	uint16_t phdrCount = file->e_phnum;
-	Elf32_Phdr *phdr = reinterpret_cast<Elf32_Phdr *>( baseAddr + file->e_phoff );
+	Elf_Phdr *phdr = reinterpret_cast<Elf_Phdr *>( baseAddr + file->e_phoff );
 	for( uint16_t i = 0; i < phdrCount; ++i )
 	{
-		Elf32_Phdr &hdr = phdr[i];
+		Elf_Phdr &hdr = phdr[i];
 		if( hdr.p_type == PT_LOAD && hdr.p_flags == ( PF_X | PF_R ) )
 		{
 			lib.memorySize = PAGE_ALIGN_UP( hdr.p_filesz );
@@ -436,6 +462,26 @@ bool SymbolFinder::GetLibraryInfo( const void *handle, DynLibInfo &lib )
 
 #elif defined SYSTEM_MACOSX
 
+#if defined ARCHITECTURE_X86
+	
+	typedef struct mach_header mach_header_t;
+	typedef struct segment_command segment_command_t;
+	const uint32_t MH_MAGIC_VALUE = MH_MAGIC;
+	const uint32_t LC_SEGMENT_VALUE = LC_SEGMENT;
+	const cpu_type_t CPU_TYPE = CPU_TYPE_I386;
+	const cpu_subtype_t CPU_SUBTYPE = CPU_SUBTYPE_I386_ALL;
+	
+#elif defined ARCHITECTURE_X86_64
+	
+	typedef struct mach_header_64 MachHeader;
+	typedef struct segment_command_64 MachSegment;
+	const uint32_t MH_MAGIC_VALUE = MH_MAGIC_64;
+	const uint32_t LC_SEGMENT_VALUE = LC_SEGMENT_64;
+	const cpu_type_t CPU_TYPE = CPU_TYPE_X86_64;
+	const cpu_subtype_t CPU_SUBTYPE = CPU_SUBTYPE_X86_64_ALL;
+	
+#endif
+	
 	uintptr_t baseAddr = 0;
 	for( uint32_t i = 1; i < m_ImageList->infoArrayCount; ++i )
 	{
@@ -454,25 +500,25 @@ bool SymbolFinder::GetLibraryInfo( const void *handle, DynLibInfo &lib )
 	if( baseAddr == 0 )
 		return false;
 
-	struct mach_header *file = reinterpret_cast<struct mach_header *>( baseAddr );
-	if( file->magic != MH_MAGIC )
+	mach_header_t *file = reinterpret_cast<mach_header_t *>( baseAddr );
+	if( file->magic != MH_MAGIC_VALUE )
 		return false;
 
-	if( file->cputype != CPU_TYPE_I386 || file->cpusubtype != CPU_SUBTYPE_I386_ALL )
+	if( file->cputype != CPU_TYPE || file->cpusubtype != CPU_SUBTYPE )
 		return false;
 
 	if( file->filetype != MH_DYLIB )
 		return false;
 
 	uint32_t cmd_count = file->ncmds;
-	struct segment_command *seg = reinterpret_cast<struct segment_command *>( baseAddr + sizeof( mach_header ) );
+	segment_command_t *seg = reinterpret_cast<segment_command_t *>( baseAddr + sizeof( mach_header_t ) );
 
 	for( uint32_t i = 0; i < cmd_count; ++i )
 	{
-		if( seg->cmd == LC_SEGMENT )
+		if( seg->cmd == LC_SEGMENT_VALUE )
 			lib.memorySize += seg->vmsize;
 
-		seg = reinterpret_cast<struct segment_command *>( reinterpret_cast<uintptr_t>( seg ) + seg->cmdsize );
+		seg = reinterpret_cast<segment_command_t *>( reinterpret_cast<uintptr_t>( seg ) + seg->cmdsize );
 	}
 
 #endif
