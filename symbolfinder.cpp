@@ -145,7 +145,7 @@ void *SymbolFinder::FindSymbol( const void *handle, const char *symbol )
 			break;
 		}
 
-	if( libtable == nullptr)
+	if( libtable == nullptr )
 	{
 		symbolTables.push_back( LibSymbolTable( dlmap->l_addr ) );
 		libtable = &symbolTables.back( );
@@ -153,12 +153,12 @@ void *SymbolFinder::FindSymbol( const void *handle, const char *symbol )
 
 	SymbolTable &table = libtable->table;
 	void *symbol_ptr = table[symbol];
-	if( symbol_ptr != nullptr)
+	if( symbol_ptr != nullptr )
 		return symbol_ptr;
 
-	struct stat dlstat;
+	struct stat64 dlstat;
 	int dlfile = open( dlmap->l_name, O_RDONLY );
-	if( dlfile == -1 || fstat( dlfile, &dlstat ) == -1 )
+	if( dlfile == -1 || fstat64( dlfile, &dlstat ) == -1 )
 	{
 		close( dlfile );
 		return nullptr;
@@ -191,7 +191,7 @@ void *SymbolFinder::FindSymbol( const void *handle, const char *symbol )
 			strtab_hdr = &hdr;
 	}
 
-	if( symtab_hdr == nullptr || strtab_hdr == nullptr)
+	if( symtab_hdr == nullptr || strtab_hdr == nullptr )
 	{
 		munmap( file_hdr, dlstat.st_size );
 		return nullptr;
@@ -257,7 +257,7 @@ void *SymbolFinder::FindSymbol( const void *handle, const char *symbol )
 			break;
 		}
 
-	if( libtable == nullptr)
+	if( libtable == nullptr )
 	{
 		symbolTables.push_back( LibSymbolTable( dlbase ) );
 		libtable = &symbolTables.back( );
@@ -265,7 +265,7 @@ void *SymbolFinder::FindSymbol( const void *handle, const char *symbol )
 
 	SymbolTable &table = libtable->table;
 	void *symbol_ptr = table[symbol];
-	if( symbol_ptr != nullptr)
+	if( symbol_ptr != nullptr )
 		return symbol_ptr;
 
 	segment_command_t *linkedit_hdr = nullptr;
@@ -288,7 +288,7 @@ void *SymbolFinder::FindSymbol( const void *handle, const char *symbol )
 		else if( loadcmds->cmd == LC_SYMTAB )
 		{
 			symtab_hdr = reinterpret_cast<symtab_command_t *>( loadcmds );
-			if( linkedit_hdr != nullptr)
+			if( linkedit_hdr != nullptr )
 				break;
 		}
 
@@ -296,7 +296,7 @@ void *SymbolFinder::FindSymbol( const void *handle, const char *symbol )
 	}
 
 	if( linkedit_hdr == nullptr || symtab_hdr == nullptr || symtab_hdr->symoff == 0 || symtab_hdr->stroff == 0 )
-		return 0;
+		return nullptr;
 
 	uintptr_t linkedit_addr = dlbase + linkedit_hdr->vmaddr;
 	nlist_t *symtab = reinterpret_cast<nlist_t *>( linkedit_addr + symtab_hdr->symoff - linkedit_hdr->fileoff );
@@ -356,7 +356,7 @@ void *SymbolFinder::FindSymbolFromBinary( const char *name, const char *symbol )
 
 void *SymbolFinder::Resolve( const void *handle, const char *data, size_t len, const void *start )
 {
-	if( data[0] == '@' )
+	if( len == 0 && data[0] == '@' )
 		return FindSymbol( handle, ++data );
 
 	if( len != 0 )
@@ -367,7 +367,7 @@ void *SymbolFinder::Resolve( const void *handle, const char *data, size_t len, c
 
 void *SymbolFinder::ResolveOnBinary( const char *name, const char *data, size_t len, const void *start )
 {
-	if( data[0] == '@' )
+	if( len == 0 && data[0] == '@' )
 		return FindSymbolFromBinary( name, ++data );
 
 	if( len != 0 )
