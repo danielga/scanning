@@ -23,7 +23,7 @@
 
 #elif defined SYSTEM_MACOSX
 
-#import <CoreServices/CoreServices.h>
+#include <CoreServices/CoreServices.h>
 #include <mach/task.h>
 #include <mach-o/dyld_images.h>
 #include <mach-o/loader.h>
@@ -31,6 +31,33 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <dlfcn.h>
+
+#if defined ARCHITECTURE_X86
+
+#define LC_SEGMENT_VALUE LC_SEGMENT
+#define MH_MAGIC_VALUE MH_MAGIC
+#define CPU_TYPE CPU_TYPE_I386
+#define CPU_SUBTYPE CPU_SUBTYPE_I386_ALL
+
+typedef struct mach_header mach_header_t;
+typedef struct segment_command segment_command_t;
+typedef struct nlist nlist_t;
+	
+#elif defined ARCHITECTURE_X86_64
+
+#define LC_SEGMENT_VALUE LC_SEGMENT_64
+#define MH_MAGIC_VALUE MH_MAGIC_64
+#define CPU_TYPE CPU_TYPE_X86_64
+#define CPU_SUBTYPE CPU_SUBTYPE_X86_64_ALL
+
+typedef struct mach_header_64 mach_header_t;
+typedef struct segment_command_64 segment_command_t;
+typedef struct nlist_64 nlist_t;
+	
+#endif
+
+typedef struct load_command load_command_t;
+typedef struct symtab_command symtab_command_t;
 
 #endif
 
@@ -224,25 +251,6 @@ void *SymbolFinder::FindSymbol( const void *handle, const char *symbol )
 	return symbol_pointer;
 
 #elif defined SYSTEM_MACOSX
-
-#if defined ARCHITECTURE_X86
-	
-	typedef struct mach_header mach_header_t;
-	typedef struct segment_command segment_command_t;
-	typedef struct nlist nlist_t;
-	const uint32_t LC_SEGMENT_VALUE = LC_SEGMENT;
-	
-#elif defined ARCHITECTURE_X86_64
-	
-	typedef struct mach_header_64 mach_header_t;
-	typedef struct segment_command_64 segment_command_t;
-	typedef struct nlist_64 nlist_t;
-	const uint32_t LC_SEGMENT_VALUE = LC_SEGMENT_64;
-	
-#endif
-
-	typedef struct load_command load_command_t;
-	typedef struct symtab_command symtab_command_t;
 
 	DynLibInfo lib;
 	if( !GetLibraryInfo( handle, lib ) )
@@ -461,26 +469,6 @@ bool SymbolFinder::GetLibraryInfo( const void *handle, DynLibInfo &lib )
 	}
 
 #elif defined SYSTEM_MACOSX
-
-#if defined ARCHITECTURE_X86
-	
-	typedef struct mach_header mach_header_t;
-	typedef struct segment_command segment_command_t;
-	const uint32_t MH_MAGIC_VALUE = MH_MAGIC;
-	const uint32_t LC_SEGMENT_VALUE = LC_SEGMENT;
-	const cpu_type_t CPU_TYPE = CPU_TYPE_I386;
-	const cpu_subtype_t CPU_SUBTYPE = CPU_SUBTYPE_I386_ALL;
-	
-#elif defined ARCHITECTURE_X86_64
-	
-	typedef struct mach_header_64 MachHeader;
-	typedef struct segment_command_64 MachSegment;
-	const uint32_t MH_MAGIC_VALUE = MH_MAGIC_64;
-	const uint32_t LC_SEGMENT_VALUE = LC_SEGMENT_64;
-	const cpu_type_t CPU_TYPE = CPU_TYPE_X86_64;
-	const cpu_subtype_t CPU_SUBTYPE = CPU_SUBTYPE_X86_64_ALL;
-	
-#endif
 	
 	uintptr_t baseAddr = 0;
 	for( uint32_t i = 1; i < m_ImageList->infoArrayCount; ++i )
