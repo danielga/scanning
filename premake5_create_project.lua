@@ -7,11 +7,11 @@ group("garrysmod_common")
 		objdir("!%{prj.location}/%{cfg.architecture}/%{cfg.buildcfg}/intermediate/%{prj.name}")
 		includedirs("include/scanning")
 		files({
-			"include/*.hpp",
+			"include/scanning/*.hpp",
 			"source/*.cpp"
 		})
 		vpaths({
-			["Header files/*"] = "include/*.hpp",
+			["Header files/*"] = "include/scanning/*.hpp",
 			["Source files/*"] = "source/*.cpp"
 		})
 
