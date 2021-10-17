@@ -1,8 +1,9 @@
 #pragma once
 
+#include "platform.hpp"
+
 #include <cstdint>
 #include <cstddef>
-#include "platform.hpp"
 
 #ifdef SYSTEM_POSIX
 
@@ -15,8 +16,6 @@
 class SymbolFinder
 {
 public:
-	SymbolFinder( );
-
 	void *FindPattern( const void *handle, const uint8_t *pattern, size_t len, const void *start = nullptr );
 	void *FindPatternFromBinary( const char *name, const uint8_t *pattern, size_t len, const void *start = nullptr );
 	void *FindSymbol( const void *handle, const char *symbol );
@@ -30,20 +29,14 @@ private:
 	bool GetLibraryInfo( const void *handle, struct DynLibInfo &info );
 
 #ifdef SYSTEM_POSIX
-	typedef std::unordered_map<std::string, void *> SymbolTable;
 
-	struct LibSymbolTable
+	struct SymbolTable
 	{
-		LibSymbolTable( uintptr_t base ) :
-			table( ), lib_base( base ), last_pos( 0 )
-		{ }
-
-		SymbolTable table;
-		uintptr_t lib_base;
-		uint32_t last_pos;
+		std::unordered_map<std::string, void *> table;
+		uint32_t last_pos = 0;
 	};
 
-	std::vector<LibSymbolTable> symbolTables;
+	std::unordered_map<uintptr_t, SymbolTable> symbolTables;
 
 #ifdef SYSTEM_MACOSX
 
