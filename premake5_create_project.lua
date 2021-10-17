@@ -8,12 +8,10 @@ group("garrysmod_common")
 		includedirs("include/scanning")
 		files({
 			"include/scanning/*.hpp",
-			"source/*.cpp"
+			"source/*.cpp",
+			"source/" .. os.target() .. "/*.cpp"
 		})
 		vpaths({
 			["Header files/*"] = "include/scanning/*.hpp",
-			["Source files/*"] = "source/*.cpp"
+			["Source files/*"] = {"source/*.cpp", "source/" .. os.target() .. "/*.cpp"}
 		})
-
-		filter("system:linux or macosx")
-			links("dl")
