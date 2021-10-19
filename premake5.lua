@@ -8,6 +8,9 @@ function IncludeScanning()
 	sysincludedirs(current_dir .. "/include")
 	links("scanning")
 
+	filter("system:linux or macosx")
+		links("dl")
+
 	filter("system:macosx")
 		links("CoreServices.framework")
 
