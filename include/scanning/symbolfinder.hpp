@@ -38,12 +38,6 @@ private:
 
 	std::unordered_map<uintptr_t, SymbolTable> symbolTables;
 
-#ifdef SYSTEM_MACOSX
-
-	struct dyld_all_image_infos *m_ImageList;
-
-#endif
-
 #endif
 
 };
