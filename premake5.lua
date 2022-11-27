@@ -5,7 +5,7 @@ function IncludeScanning()
 
 	local _project = project()
 
-	sysincludedirs(current_dir .. "/include")
+	externalincludedirs(current_dir .. "/include")
 	links("scanning")
 
 	filter("system:linux or macosx")
